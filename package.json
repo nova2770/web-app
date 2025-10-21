@@ -11,7 +11,6 @@
   "homepage": "https://github.com/openMF/web-app",
   "license": "MPL-2.0",
   "scripts": {
-    "prepare": "husky",
     "ng": "ng",
     "build": "node version.js && npm run env -s && ng build --configuration production --output-hashing=none",
     "build:prod": "node version.js && node --max-old-space-size=16384 ./node_modules/@angular/cli/bin/ng build --configuration production --output-hashing=none --base-href=/web-app/",

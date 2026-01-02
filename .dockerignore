@@ -1,12 +1,44 @@
+# 依赖
 node_modules
-npm-debug.log
+npm-debug.log*
+package-lock.json
+
+# 构建产物
+dist
+.angular
+coverage
+
+# 版本控制
+.git
+.gitignore
+
+# IDE
+.vscode
+.idea
+.DS_Store
+*.swp
+*.swo
+
+# CI/CD
+.github
+
+# Docker 相关
 Dockerfile*
 docker-compose*
 .dockerignore
-.git
-.gitignore
+
+# 文档
 README.md
 LICENSE
-.vscode
-dist
-.github
+*.md
+
+# 测试
+cypress
+e2e
+*.spec.ts
+.cypress
+
+# 临时文件
+*.log
+.env
+.env.local

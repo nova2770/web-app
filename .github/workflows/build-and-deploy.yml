@@ -1,0 +1,175 @@
+name: Build and Deploy Docker Image
+
+on:
+  workflow_dispatch:
+    inputs:
+      version:
+        description: 'Version tag (optional, default: timestamp)'
+        required: false
+        type: string
+      build_only:
+        description: 'Build image only (without deployment)'
+        required: false
+        type: boolean
+        default: false
+
+jobs:
+  build-and-deploy:
+    runs-on: [self-hosted, linux, x64, nova-dev]
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Generate version tag
+        id: version
+        run: |
+          if [ -n "${{ github.event.inputs.version }}" ]; then
+            echo "tag=${{ github.event.inputs.version }}" >> $GITHUB_OUTPUT
+          else
+            echo "tag=$(date +%Y%m%d-%H%M%S)" >> $GITHUB_OUTPUT
+          fi
+          echo "commit_sha=$(git rev-parse --short HEAD)" >> $GITHUB_OUTPUT
+          echo "build_date=$(date -u +%Y-%m-%dT%H:%M:%SZ)" >> $GITHUB_OUTPUT
+
+      - name: Build Docker image
+        run: |
+          echo "🐳 Building Docker image..."
+
+          docker build \
+            --build-arg BUILD_VERSION=${{ steps.version.outputs.tag }} \
+            --build-arg BUILD_COMMIT=${{ steps.version.outputs.commit_sha }} \
+            --build-arg BUILD_DATE=${{ steps.version.outputs.build_date }} \
+            -t web-app:${{ steps.version.outputs.tag }} \
+            -t web-app:latest \
+            -t web-app:nova-dev-latest \
+            .
+
+          echo "✅ Docker image built successfully!"
+
+      - name: Stop and remove old container
+        if: github.event.inputs.build_only != 'true'
+        run: |
+          echo "🛑 Stopping old container..."
+
+          if docker ps -a | grep -q web-app; then
+            docker-compose down || true
+            echo "✅ Old container stopped and removed"
+          else
+            echo "ℹ️  No existing container found"
+          fi
+
+      - name: Start new container
+        if: github.event.inputs.build_only != 'true'
+        env:
+          VERSION: ${{ steps.version.outputs.tag }}
+        run: |
+          echo "🚀 Starting new container..."
+
+          docker-compose up -d
+
+          echo "⏳ Waiting for container to be healthy..."
+          sleep 5
+
+          # Check container status
+          if docker ps | grep -q web-app; then
+            echo "✅ Container is running!"
+
+            # Wait for health check
+            for i in {1..30}; do
+              if docker inspect --format='{{.State.Health.Status}}' web-app 2>/dev/null | grep -q healthy; then
+                echo "✅ Container is healthy!"
+                break
+              fi
+              if [ $i -eq 30 ]; then
+                echo "⚠️  Health check timeout, but container is running"
+              fi
+              sleep 1
+            done
+          else
+            echo "❌ Container failed to start!"
+            docker logs web-app
+            exit 1
+          fi
+
+      - name: Clean up old images
+        run: |
+          echo "🧹 Cleaning up old images..."
+
+          # Keep last 5 images, remove older ones
+          docker images web-app --format "{{.ID}} {{.Tag}}" | \
+            grep -v latest | \
+            tail -n +6 | \
+            awk '{print $1}' | \
+            xargs -r docker rmi || true
+
+          echo "✅ Cleanup complete"
+
+      - name: Display build info (build only)
+        if: github.event.inputs.build_only == 'true'
+        run: |
+          echo "========================================="
+          echo "✅ Build Complete!"
+          echo "========================================="
+          echo "Version:     ${{ steps.version.outputs.tag }}"
+          echo "Commit:      ${{ steps.version.outputs.commit_sha }}"
+          echo "Build Date:  ${{ steps.version.outputs.build_date }}"
+          echo "Image:       web-app:${{ steps.version.outputs.tag }}"
+          echo "Image:       web-app:latest"
+          echo "Image:       web-app:nova-dev-latest"
+          echo "========================================="
+          echo ""
+          echo "📦 Image built successfully but NOT deployed."
+          echo "To deploy manually, run:"
+          echo "  VERSION=${{ steps.version.outputs.tag }} docker-compose up -d"
+
+      - name: Display deployment info
+        if: github.event.inputs.build_only != 'true'
+        run: |
+          echo "========================================="
+          echo "✅ Deployment Complete!"
+          echo "========================================="
+          echo "Version:     ${{ steps.version.outputs.tag }}"
+          echo "Commit:      ${{ steps.version.outputs.commit_sha }}"
+          echo "Build Date:  ${{ steps.version.outputs.build_date }}"
+          echo "Container:   web-app"
+          echo "Port:        \${WEB_PORT:-4200} → 80"
+          echo "========================================="
+
+          # Show container info
+          docker ps --filter name=web-app --format "table {{.Names}}\t{{.Status}}\t{{.Ports}}"
+
+      - name: Build Summary (build only)
+        if: github.event.inputs.build_only == 'true'
+        run: |
+          echo "### 📦 Build Complete!" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "- **Version**: ${{ steps.version.outputs.tag }}" >> $GITHUB_STEP_SUMMARY
+          echo "- **Commit**: ${{ steps.version.outputs.commit_sha }}" >> $GITHUB_STEP_SUMMARY
+          echo "- **Build Date**: ${{ steps.version.outputs.build_date }}" >> $GITHUB_STEP_SUMMARY
+          echo "- **Image Tags**: web-app:${{ steps.version.outputs.tag }}, web-app:latest, web-app:nova-dev-latest" >> $GITHUB_STEP_SUMMARY
+          echo "- **Built by**: ${{ github.actor }}" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "> ⚠️ **Image built but NOT deployed**" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "#### Manual Deployment" >> $GITHUB_STEP_SUMMARY
+          echo "\`\`\`bash" >> $GITHUB_STEP_SUMMARY
+          echo "VERSION=${{ steps.version.outputs.tag }} docker-compose up -d" >> $GITHUB_STEP_SUMMARY
+          echo "\`\`\`" >> $GITHUB_STEP_SUMMARY
+
+      - name: Deployment Summary
+        if: github.event.inputs.build_only != 'true'
+        run: |
+          echo "### 🎉 Deployment Complete!" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "- **Version**: ${{ steps.version.outputs.tag }}" >> $GITHUB_STEP_SUMMARY
+          echo "- **Commit**: ${{ steps.version.outputs.commit_sha }}" >> $GITHUB_STEP_SUMMARY
+          echo "- **Build Date**: ${{ steps.version.outputs.build_date }}" >> $GITHUB_STEP_SUMMARY
+          echo "- **Container**: web-app" >> $GITHUB_STEP_SUMMARY
+          echo "- **Port**: \${WEB_PORT:-4200} → 80" >> $GITHUB_STEP_SUMMARY
+          echo "- **Deployed by**: ${{ github.actor }}" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "#### Access" >> $GITHUB_STEP_SUMMARY
+          echo "- Web: http://localhost:\${WEB_PORT:-4200}" >> $GITHUB_STEP_SUMMARY
+          echo "- Health: http://localhost:\${WEB_PORT:-4200}/health" >> $GITHUB_STEP_SUMMARY
+          echo "- Version: http://localhost:\${WEB_PORT:-4200}/VERSION.txt" >> $GITHUB_STEP_SUMMARY

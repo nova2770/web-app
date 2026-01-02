@@ -1,27 +1,60 @@
-version: '3.5'
+version: '3.8'
 
 services:
-  mifosx-web-app:
-    build:
-      context: .
-      dockerfile: Dockerfile
-      args:
-        - BUILD_ENVIRONMENT_OPTIONS=--configuration production
-        - BUILDER_IMAGE=node:20-alpine
-        - NGINX_IMAGE=nginx:1.19.3
-        - NPM_REGISTRY_URL=https://registry.npmjs.org/
-        - PUPPETEER_DOWNLOAD_HOST_ARG=https://storage.googleapis.com
-        - PUPPETEER_CHROMIUM_REVISION_ARG=1011831
+  web-app:
+    image: web-app:${VERSION:-latest}
+    container_name: web-app
     ports:
-      - '4200:80'
+      - "${WEB_PORT:-4200}:80"
+    restart: unless-stopped
     environment:
-      - FINERACT_API_URLS=https://sandbox.mifos.community,https://demo.mifos.community,https://localhost:8443
-      - FINERACT_API_URL=https://localhost:8443
-      - FINERACT_API_PROVIDER=/fineract-provider/api
-      - FINERACT_API_VERSION=/v1
-      - FINERACT_PLATFORM_TENANT_IDENTIFIER=default
-      - MIFOS_DEFAULT_LANGUAGE=en-US
-      - MIFOS_SUPPORTED_LANGUAGES=cs-CS,de-DE,en-US,es-MX,es-CL,fr-FR,it-IT,ko-KO,lt-LT,lv-LV,ne-NE,pt-PT,sw-SW
-      - MIFOS_SESSION_IDLE_TIMEOUT=300000
-      - MIFOS_PRELOAD_CLIENTS=true
-      - MIFOS_DEFAULT_CHAR_DELIMITER=,
+      # 运行时环境变量（用于 envsubst 替换到 env.js）
+      # Backend Configuration
+      - FINERACT_API_URLS=${FINERACT_API_URLS:-https://sandbox.mifos.community,https://demo.mifos.community,https://localhost:8443}
+      - FINERACT_API_URL=${FINERACT_API_URL:-https://localhost:8443}
+      - FINERACT_API_PROVIDER=${FINERACT_API_PROVIDER:-/fineract-provider/api}
+      - FINERACT_API_VERSION=${FINERACT_API_VERSION:-/v1}
+      - FINERACT_PLATFORM_TENANT_IDENTIFIER=${FINERACT_PLATFORM_TENANT_IDENTIFIER:-default}
+      - FINERACT_PLATFORM_TENANTS_IDENTIFIER=${FINERACT_PLATFORM_TENANTS_IDENTIFIER:-}
+
+      # Language Configuration
+      - MIFOS_DEFAULT_LANGUAGE=${MIFOS_DEFAULT_LANGUAGE:-en-US}
+      - MIFOS_SUPPORTED_LANGUAGES=${MIFOS_SUPPORTED_LANGUAGES:-cs-CS,de-DE,en-US,es-MX,es-CL,fr-FR,it-IT,ko-KO,lt-LT,lv-LV,ne-NE,pt-PT,sw-SW}
+
+      # UI Configuration
+      - MIFOS_PRELOAD_CLIENTS=${MIFOS_PRELOAD_CLIENTS:-true}
+      - MIFOS_DEFAULT_CHAR_DELIMITER=${MIFOS_DEFAULT_CHAR_DELIMITER:-,}
+      - MIFOS_ALLOW_SERVER_SWITCH_SELECTOR=${MIFOS_ALLOW_SERVER_SWITCH_SELECTOR:-true}
+      - MIFOS_DISPLAY_BACKEND_INFO=${MIFOS_DISPLAY_BACKEND_INFO:-false}
+      - MIFOS_DISPLAY_TENANT_SELECTOR=${MIFOS_DISPLAY_TENANT_SELECTOR:-false}
+
+      # Timeout Configuration
+      - MIFOS_SESSION_IDLE_TIMEOUT=${MIFOS_SESSION_IDLE_TIMEOUT:-300000}
+      - MIFOS_WAIT_TIME_FOR_NOTIFICATIONS=${MIFOS_WAIT_TIME_FOR_NOTIFICATIONS:-60}
+      - MIFOS_WAIT_TIME_FOR_CATCHUP=${MIFOS_WAIT_TIME_FOR_CATCHUP:-30}
+
+      # Security Configuration
+      - MIFOS_OAUTH_SERVER_ENABLED=${MIFOS_OAUTH_SERVER_ENABLED:-false}
+      - MIFOS_OAUTH_SERVER_URL=${MIFOS_OAUTH_SERVER_URL:-}
+      - MIFOS_OAUTH_CLIENT_ID=${MIFOS_OAUTH_CLIENT_ID:-}
+      - MIFOS_MIN_PASSWORD_LENGTH=${MIFOS_MIN_PASSWORD_LENGTH:-6}
+      - MIFOS_HTTP_CACHE_ENABLED=${MIFOS_HTTP_CACHE_ENABLED:-false}
+
+      # OIDC Plugin Configuration
+      - FINERACT_PLUGIN_OIDC_ENABLED=${FINERACT_PLUGIN_OIDC_ENABLED:-false}
+      - FINERACT_PLUGIN_OIDC_BASE_URL=${FINERACT_PLUGIN_OIDC_BASE_URL:-}
+      - FINERACT_PLUGIN_OIDC_CLIENT_ID=${FINERACT_PLUGIN_OIDC_CLIENT_ID:-}
+      - FINERACT_PLUGIN_OIDC_API_URL=${FINERACT_PLUGIN_OIDC_API_URL:-}
+      - FINERACT_PLUGIN_OIDC_FRONTEND_URL=${FINERACT_PLUGIN_OIDC_FRONTEND_URL:-}
+
+      # vNext API Configuration
+      - VNEXT_API_URL=${VNEXT_API_URL:-}
+      - VNEXT_API_PROVIDER=${VNEXT_API_PROVIDER:-}
+      - VNEXT_API_VERSION=${VNEXT_API_VERSION:-}
+      - VNEXT_INTERBANK_TRANSFERS=${VNEXT_INTERBANK_TRANSFERS:-}
+    healthcheck:
+      test: ["CMD", "wget", "--quiet", "--tries=1", "--spider", "http://localhost/health"]
+      interval: 30s
+      timeout: 3s
+      retries: 3
+      start_period: 10s

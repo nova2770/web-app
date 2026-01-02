@@ -15,7 +15,7 @@ on:
 
 jobs:
   build-and-deploy:
-    runs-on: [self-hosted, linux, x64, nova-dev]
+    runs-on: [self-hosted, linux, x64, sit-336]
 
     steps:
       - name: Checkout code
@@ -42,7 +42,7 @@ jobs:
             --build-arg BUILD_DATE=${{ steps.version.outputs.build_date }} \
             -t web-app:${{ steps.version.outputs.tag }} \
             -t web-app:latest \
-            -t web-app:nova-dev-latest \
+            -t web-app:sit-latest \
             .
 
           echo "✅ Docker image built successfully!"
@@ -116,7 +116,7 @@ jobs:
           echo "Build Date:  ${{ steps.version.outputs.build_date }}"
           echo "Image:       web-app:${{ steps.version.outputs.tag }}"
           echo "Image:       web-app:latest"
-          echo "Image:       web-app:nova-dev-latest"
+          echo "Image:       web-app:sit-latest"
           echo "========================================="
           echo ""
           echo "📦 Image built successfully but NOT deployed."
@@ -147,7 +147,7 @@ jobs:
           echo "- **Version**: ${{ steps.version.outputs.tag }}" >> $GITHUB_STEP_SUMMARY
           echo "- **Commit**: ${{ steps.version.outputs.commit_sha }}" >> $GITHUB_STEP_SUMMARY
           echo "- **Build Date**: ${{ steps.version.outputs.build_date }}" >> $GITHUB_STEP_SUMMARY
-          echo "- **Image Tags**: web-app:${{ steps.version.outputs.tag }}, web-app:latest, web-app:nova-dev-latest" >> $GITHUB_STEP_SUMMARY
+          echo "- **Image Tags**: web-app:${{ steps.version.outputs.tag }}, web-app:latest, web-app:sit-latest" >> $GITHUB_STEP_SUMMARY
           echo "- **Built by**: ${{ github.actor }}" >> $GITHUB_STEP_SUMMARY
           echo "" >> $GITHUB_STEP_SUMMARY
           echo "> ⚠️ **Image built but NOT deployed**" >> $GITHUB_STEP_SUMMARY
